@@ -1,6 +1,7 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load(":ast_file_tests.bzl", "ast_file_test_suite")
 load(":coverage_settings_tests.bzl", "coverage_settings_test_suite")
+load(":cc_library_tests.bzl", "cc_library_test_suite")
 load(":debug_settings_tests.bzl", "debug_settings_test_suite")
 load(":generated_header_tests.bzl", "generated_header_test_suite")
 load(":module_cache_settings_tests.bzl", "module_cache_settings_test_suite")
@@ -14,6 +15,8 @@ load(":pch_output_dir_tests.bzl", "pch_output_dir_test_suite")
 licenses(["notice"])
 
 ast_file_test_suite(name = "ast_file")
+
+cc_library_test_suite()
 
 coverage_settings_test_suite(name = "coverage_settings")
 
@@ -45,5 +48,6 @@ bzl_library(
     deps = [
         "//test/fixtures:starlark_tests_bzls",
         "//test/rules:starlark_tests_bzls",
+        "@bazel_skylib//rules:build_test",
     ],
 )
