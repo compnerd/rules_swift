@@ -4,6 +4,8 @@ package(
     ],
 )
 
+load("@bazel_skylib//lib:selects.bzl", "selects")
+
 licenses(["notice"])
 
 cc_library(
@@ -13,18 +15,17 @@ cc_library(
 )
 
 cc_library(
-    name = "path_utils",
-    srcs = ["path_utils.cc"],
-    hdrs = ["path_utils.h"],
-)
-
-cc_library(
     name = "process",
     srcs = ["process.cc"],
     hdrs = ["process.h"],
-    deps = [
-        ":path_utils",
-    ],
+    copts = selects.with_or({
+        ("@bazel_tools//tools/cpp:clang-cl", "@bazel_tools//tools/cpp:msvc"): [
+            "/std:c++17",
+        ],
+        "//conditions:default": [
+            "-std=c++17",
+        ],
+    }),
 )
 
 cc_library(
