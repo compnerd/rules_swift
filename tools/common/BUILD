@@ -1,8 +1,4 @@
-package(
-    default_visibility = [
-        "//tools/worker:__pkg__",
-    ],
-)
+package(default_visibility = ["//tools/worker:__pkg__"])
 
 load("@bazel_skylib//lib:selects.bzl", "selects")
 
