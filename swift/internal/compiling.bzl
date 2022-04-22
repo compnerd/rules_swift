@@ -111,8 +111,7 @@ _WMO_FLAGS = {
 }
 
 def compile_action_configs(
-        *,
-        additional_objc_copts = [],
+        ctx,
         additional_swiftc_copts = [],
         generated_header_rewriter = None):
     """Returns the list of action configs needed to perform Swift compilation.
@@ -121,6 +120,7 @@ def compile_action_configs(
     compilation actions will be correctly configured.
 
     Args:
+        ctx: The toolchain context.
         additional_objc_copts: An optional list of additional Objective-C
             compiler flags that should be passed (preceded by `-Xcc`) to Swift
             compile actions *and* Swift explicit module precompile actions after
@@ -152,6 +152,42 @@ def compile_action_configs(
             features = [SWIFT_FEATURE_USE_OLD_DRIVER],
         ),
     ]
+
+    if ctx.attr.sdkroot:
+      action_configs.append(
+        swift_toolchain_config.action_config(
+            actions = [
+                swift_action_names.COMPILE,
+                swift_action_names.DERIVE_FILES,
+                swift_action_names.PRECOMPILE_C_MODULE,
+                swift_action_names.DUMP_AST,
+            ],
+            configurators = [
+                swift_toolchain_config.add_arg(
+                    "-sdk",
+                    ctx.attr.sdkroot,
+                ),
+            ]
+        ),
+      )
+
+    action_configs.append(
+        swift_toolchain_config.action_config(
+            actions = [
+                swift_action_names.COMPILE,
+                swift_action_names.DERIVE_FILES,
+                swift_action_names.PRECOMPILE_C_MODULE,
+                swift_action_names.DUMP_AST,
+            ],
+            configurators = [
+                swift_toolchain_config.add_arg(
+                  paths.join(ctx.attr.sdkroot, "..", "..", "Library", "XCTest-development", "usr", "lib", "swift", ctx.attr.os, ctx.attr.arch),
+                  format = "-I%s",
+                ),
+            ],
+        ),
+    )
+
 
     #### Flags that control compilation outputs
     action_configs += [
@@ -963,7 +999,7 @@ def compile_action_configs(
             configurators = [_user_compile_flags_configurator],
         ),
     )
-    if additional_objc_copts:
+    if ctx.fragments.swift.copts():
         action_configs.append(
             swift_toolchain_config.action_config(
                 actions = [
@@ -974,7 +1010,7 @@ def compile_action_configs(
                 ],
                 configurators = [
                     lambda _, args: args.add_all(
-                        additional_objc_copts,
+                        ctx.fragments.swift.copts(),
                         before_each = "-Xcc",
                     ),
                 ],

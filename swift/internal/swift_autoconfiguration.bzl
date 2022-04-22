@@ -323,10 +323,12 @@ swift_toolchain(
   root = "{root}",
   version_file = "{version_file}",
   tool_executable_suffix = ".exe",
+  sdkroot = "{sdkroot}",
 )
 """.format(
             feature_list = ", ".join(['"{}"'.format(feature) for feature in feature_values]),
             root = root,
+            sdkroot = repository_ctx.os.environ["SDKROOT"].replace("\\", "/"),
             version_file = version_file,
         ),
     )

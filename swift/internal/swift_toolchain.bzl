@@ -20,6 +20,7 @@ toolchain, see `swift.bzl`.
 """
 
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
+load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
 load(":actions.bzl", "swift_action_names")
 load(":attrs.bzl", "swift_toolchain_driver_attrs")
@@ -105,20 +106,17 @@ def _all_tool_configs(
         swift_action_names.DUMP_AST: compile_tool_config,
     }
 
-def _all_action_configs(additional_swiftc_copts):
+def _all_action_configs(ctx):
     """Returns the action configurations for the Swift toolchain.
 
     Args:
-        additional_swiftc_copts: Additional Swift compiler flags obtained from
-            the `swift` configuration fragment.
+        ctx: The toolchain context.
 
     Returns:
         A list of action configurations for the toolchain.
     """
     return (
-        compile_action_configs(
-            additional_swiftc_copts = additional_swiftc_copts,
-        ) +
+        compile_action_configs(ctx) +
         modulewrap_action_configs() +
         autolink_extract_action_configs()
     )
@@ -126,6 +124,7 @@ def _all_action_configs(additional_swiftc_copts):
 def _swift_linkopts_cc_info(
         cpu,
         os,
+        sdkroot,
         toolchain_label,
         toolchain_root):
     """Returns a `CcInfo` containing flags that should be passed to the linker.
@@ -147,28 +146,49 @@ def _swift_linkopts_cc_info(
         depend on Swift targets.
     """
 
-    # TODO(#8): Support statically linking the Swift runtime.
-    platform_lib_dir = "{toolchain_root}/lib/swift/{os}".format(
-        os = os,
-        toolchain_root = toolchain_root,
-    )
+    if sdkroot:
+        platform_lib_dir = "{sdkroot}/usr/lib/swift/{os}/{arch}".format(
+            sdkroot = sdkroot,
+            os = os,
+            arch = cpu,
+        )
 
-    runtime_object_path = "{platform_lib_dir}/{cpu}/swiftrt.o".format(
-        cpu = cpu,
-        platform_lib_dir = platform_lib_dir,
-    )
+        runtime_object_path = "{sdkroot}/usr/lib/swift/{os}/{arch}/swiftrt.{ext}".format(
+            sdkroot = sdkroot,
+            os = os,
+            arch = cpu,
+            ext = "obj" if os == "windows" else "o",
+        )
+    else:
+        # TODO(#8): Support statically linking the Swift runtime.
+        platform_lib_dir = "{toolchain_root}/lib/swift/{os}".format(
+            os = os,
+            toolchain_root = toolchain_root,
+        )
 
-    linkopts = [
-        "-pie",
-        "-L{}".format(platform_lib_dir),
-        "-Wl,-rpath,{}".format(platform_lib_dir),
-        "-lm",
-        "-lstdc++",
-        "-lrt",
-        "-ldl",
-        runtime_object_path,
-        "-static-libgcc",
-    ]
+        runtime_object_path = "{platform_lib_dir}/{cpu}/swiftrt.o".format(
+            cpu = cpu,
+            platform_lib_dir = platform_lib_dir,
+        )
+
+    if os == "windows":
+        linkopts = [
+          "-LIBPATH:{}".format(platform_lib_dir),
+          "-LIBPATH:{}".format(paths.join(sdkroot, "..", "..", "Library", "XCTest-development", "usr", "lib", "swift", os, cpu)),
+          runtime_object_path,
+        ]
+    else:
+        linkopts = [
+            "-pie",
+            "-L{}".format(platform_lib_dir),
+            "-Wl,-rpath,{}".format(platform_lib_dir),
+            "-lm",
+            "-lstdc++",
+            "-lrt",
+            "-ldl",
+            runtime_object_path,
+            "-static-libgcc",
+        ]
 
     return CcInfo(
         linking_context = cc_common.create_linking_context(
@@ -188,6 +208,7 @@ def _swift_toolchain_impl(ctx):
     swift_linkopts_cc_info = _swift_linkopts_cc_info(
         ctx.attr.arch,
         ctx.attr.os,
+        ctx.attr.sdkroot,
         ctx.label,
         toolchain_root,
     )
@@ -213,9 +234,7 @@ def _swift_toolchain_impl(ctx):
         additional_tools = [ctx.file.version_file],
         tool_executable_suffix = ctx.attr.tool_executable_suffix,
     )
-    all_action_configs = _all_action_configs(
-        additional_swiftc_copts = ctx.fragments.swift.copts(),
-    )
+    all_action_configs = _all_action_configs(ctx)
 
     # TODO(allevato): Move some of the remaining hardcoded values, like object
     # format and Obj-C interop support, to attributes so that we can remove the
@@ -321,6 +340,12 @@ for incremental compilation using a persistent mode.
                 doc = """\
 The suffix to apply to the tools when invoking them.  This is a platform
 dependent value (e.g. `.exe` on Window).
+                  """,
+                mandatory = False,
+            ),
+            "sdkroot": attr.string(
+                doc = """\
+The root of a SDK to be used for building the target.
                   """,
                 mandatory = False,
             ),
